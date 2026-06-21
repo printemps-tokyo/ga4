@@ -1,0 +1,177 @@
+#!/usr/bin/env node
+import { parseArgs } from "node:util";
+import { readFile, writeFile } from "node:fs/promises";
+
+import { requestAccessToken } from "./auth.js";
+import { DEFAULT_METRICS, buildRunReportBody, parseReport } from "./report.js";
+import { runReport } from "./api.js";
+import { renderJson, renderMarkdown } from "./render.js";
+import type { Report, ServiceAccount } from "./types.js";
+
+const HELP = `ga4 - check a GA4 property's recent traffic from the terminal
+
+Usage:
+  ga4 --property <id> [options]
+
+Authenticates with a Google service account and prints recent users, sessions,
+and pageviews for a GA4 property.
+
+Options:
+  --property <id>     GA4 numeric property id (or env GA_PROPERTY_ID)
+  --days <n>          Trailing days to report (default: 7)
+  --metrics <list>    Comma list of GA4 metric names
+                      (default: ${DEFAULT_METRICS.join(",")})
+  --top <n>           Also list the top n pages by pageviews
+  --key-file <path>   Service-account JSON key (or env GOOGLE_APPLICATION_CREDENTIALS)
+  --token <token>     Use this OAuth access token directly (or env GA_ACCESS_TOKEN)
+  --format <md|json>  Output format (default: md)
+  -o, --output <file> Write to a file (default: stdout)
+  -h, --help          Show this help
+  -v, --version       Show version
+
+Setup: create a service account, enable the Analytics Data API, download its
+JSON key, and add the service-account email to the GA4 property as a Viewer.
+`;
+
+async function readVersion(): Promise<string> {
+  const { fileURLToPath } = await import("node:url");
+  const { join, dirname } = await import("node:path");
+  const here = dirname(fileURLToPath(import.meta.url));
+  try {
+    const raw = await readFile(join(here, "..", "package.json"), "utf8");
+    return (JSON.parse(raw) as { version: string }).version;
+  } catch {
+    return "0.0.0";
+  }
+}
+
+/** Resolve an access token from an explicit token or a service-account key. */
+async function resolveToken(keyFile: string | undefined, token: string | undefined): Promise<string> {
+  const explicit = token ?? process.env.GA_ACCESS_TOKEN;
+  if (explicit) {
+    return explicit;
+  }
+  const path = keyFile ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (!path) {
+    throw new Error(
+      "no credentials: pass --token, or --key-file / GOOGLE_APPLICATION_CREDENTIALS pointing to a service-account JSON key",
+    );
+  }
+  let sa: ServiceAccount;
+  try {
+    sa = JSON.parse(await readFile(path, "utf8")) as ServiceAccount;
+  } catch (err) {
+    throw new Error(`cannot read service-account key "${path}": ${(err as Error).message}`);
+  }
+  if (!sa.client_email || !sa.private_key) {
+    throw new Error(`"${path}" is not a service-account key (missing client_email/private_key)`);
+  }
+  return requestAccessToken(sa);
+}
+
+async function main(): Promise<number> {
+  const argv = process.argv.slice(2);
+  if (argv.includes("-h") || argv.includes("--help")) {
+    process.stdout.write(HELP);
+    return 0;
+  }
+  if (argv.includes("-v") || argv.includes("--version")) {
+    process.stdout.write((await readVersion()) + "\n");
+    return 0;
+  }
+
+  let values;
+  try {
+    values = parseArgs({
+      args: argv,
+      allowPositionals: false,
+      options: {
+        property: { type: "string" },
+        days: { type: "string" },
+        metrics: { type: "string" },
+        top: { type: "string" },
+        "key-file": { type: "string" },
+        token: { type: "string" },
+        format: { type: "string" },
+        output: { type: "string", short: "o" },
+      },
+    }).values;
+  } catch (err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    return 1;
+  }
+
+  const propertyId = values.property ?? process.env.GA_PROPERTY_ID;
+  if (!propertyId) {
+    process.stderr.write("error: --property <id> is required (or set GA_PROPERTY_ID)\n");
+    return 1;
+  }
+  const days = values.days ? Number(values.days) : 7;
+  if (!Number.isInteger(days) || days < 1) {
+    process.stderr.write("error: --days must be a positive integer\n");
+    return 1;
+  }
+  const metrics = values.metrics ? values.metrics.split(",").map((s) => s.trim()) : DEFAULT_METRICS;
+  const top = values.top ? Number(values.top) : undefined;
+  if (top !== undefined && (!Number.isInteger(top) || top < 1)) {
+    process.stderr.write("error: --top must be a positive integer\n");
+    return 1;
+  }
+  const format = values.format ?? "md";
+  if (format !== "md" && format !== "json") {
+    process.stderr.write("error: --format must be md or json\n");
+    return 1;
+  }
+
+  let token: string;
+  try {
+    token = await resolveToken(values["key-file"], values.token);
+  } catch (err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    return 1;
+  }
+
+  let daily: Report;
+  let topPages: Report | undefined;
+  try {
+    const dailyBody = buildRunReportBody({ days, metrics, dimensions: ["date"], orderByDimensionAsc: "date" });
+    daily = parseReport(await runReport(propertyId, dailyBody, token));
+    if (top !== undefined) {
+      const topBody = buildRunReportBody({
+        days,
+        metrics: ["screenPageViews"],
+        dimensions: ["pagePath"],
+        limit: top,
+        orderByMetricDesc: "screenPageViews",
+      });
+      topPages = parseReport(await runReport(propertyId, topBody, token));
+    }
+  } catch (err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    return 1;
+  }
+
+  const input = { propertyId, days, daily, topPages };
+  const output = format === "json" ? renderJson(input) : renderMarkdown(input);
+  if (values.output) {
+    try {
+      await writeFile(values.output, output, "utf8");
+    } catch (err) {
+      process.stderr.write(`error: cannot write "${values.output}": ${(err as Error).message}\n`);
+      return 1;
+    }
+    process.stderr.write(`ga4: wrote ${values.output}\n`);
+  } else {
+    process.stdout.write(output);
+  }
+  return 0;
+}
+
+main()
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((err: unknown) => {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    process.exitCode = 1;
+  });
