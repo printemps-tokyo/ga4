@@ -1,5 +1,5 @@
 import type { Report } from "./types.js";
-import { formatGaDate, totalsByMetric } from "./report.js";
+import { formatGaDate, isRateMetric, totalsByMetric } from "./report.js";
 
 /** Friendly column labels for the common GA4 metric names. */
 const METRIC_LABELS: Record<string, string> = {
@@ -31,12 +31,13 @@ export interface RenderInput {
 export function renderMarkdown(input: RenderInput): string {
   const { propertyId, days, daily, topPages } = input;
   const totals = totalsByMetric(daily);
-  const lines: string[] = [`# GA4 property ${propertyId} — last ${days} days`, ""];
+  const lines: string[] = [`# GA4 property ${propertyId} — last ${days} complete days (excluding today)`, ""];
 
-  // Totals summary.
+  // Totals summary. Rate metrics (e.g. bounceRate) are not summable, so they
+  // are shown as "avg n/a" instead of a meaningless column sum.
   lines.push("## Totals");
   daily.metricNames.forEach((m, i) => {
-    lines.push(`- ${label(m)}: ${num(totals[i] ?? 0)}`);
+    lines.push(isRateMetric(m) ? `- ${label(m)}: avg n/a (rate metric)` : `- ${label(m)}: ${num(totals[i] ?? 0)}`);
   });
   lines.push("");
 
@@ -73,7 +74,10 @@ export function renderJson(input: RenderInput): string {
       {
         propertyId,
         days,
-        totals: Object.fromEntries(daily.metricNames.map((m, i) => [m, totals[i] ?? 0])),
+        // Rate metrics are not summable, so their total is null.
+        totals: Object.fromEntries(
+          daily.metricNames.map((m, i) => [m, isRateMetric(m) ? null : (totals[i] ?? 0)]),
+        ),
         daily: daily.rows.map((row) => ({
           date: formatGaDate(row.dimensions[0] ?? ""),
           ...Object.fromEntries(daily.metricNames.map((m, i) => [m, row.metrics[i] ?? 0])),

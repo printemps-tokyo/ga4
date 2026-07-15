@@ -3,6 +3,7 @@ import {
   buildRunReportBody,
   parseReport,
   totalsByMetric,
+  isRateMetric,
   formatGaDate,
   DEFAULT_METRICS,
 } from "../src/report.js";
@@ -16,7 +17,8 @@ describe("buildRunReportBody", () => {
       dimensions: ["date"],
       orderByDimensionAsc: "date",
     });
-    expect(body.dateRanges).toEqual([{ startDate: "7daysAgo", endDate: "today" }]);
+    // 7daysAgo..yesterday covers exactly 7 complete days, excluding today.
+    expect(body.dateRanges).toEqual([{ startDate: "7daysAgo", endDate: "yesterday" }]);
     expect(body.metrics).toEqual([
       { name: "totalUsers" },
       { name: "sessions" },
@@ -35,7 +37,7 @@ describe("buildRunReportBody", () => {
       limit: 5,
       orderByMetricDesc: "screenPageViews",
     });
-    expect(body.dateRanges).toEqual([{ startDate: "30daysAgo", endDate: "today" }]);
+    expect(body.dateRanges).toEqual([{ startDate: "30daysAgo", endDate: "yesterday" }]);
     expect(body.limit).toBe("5");
     expect(body.orderBys).toEqual([{ desc: true, metric: { metricName: "screenPageViews" } }]);
   });
@@ -66,6 +68,19 @@ describe("parseReport / totalsByMetric", () => {
     const report = parseReport({});
     expect(report.rows).toEqual([]);
     expect(totalsByMetric(report)).toEqual([]);
+  });
+});
+
+describe("isRateMetric", () => {
+  it("recognizes known rate metrics, including suffixed key-event rates", () => {
+    expect(isRateMetric("bounceRate")).toBe(true);
+    expect(isRateMetric("engagementRate")).toBe(true);
+    expect(isRateMetric("sessionKeyEventRate:purchase")).toBe(true);
+  });
+
+  it("leaves additive metrics alone", () => {
+    expect(isRateMetric("sessions")).toBe(false);
+    expect(isRateMetric("screenPageViews")).toBe(false);
   });
 });
 

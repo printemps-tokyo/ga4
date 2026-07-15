@@ -3,9 +3,23 @@ import type { Report } from "./types.js";
 /** Default metrics for a quick "how much traffic" check. */
 export const DEFAULT_METRICS = ["totalUsers", "sessions", "screenPageViews", "newUsers"];
 
+/**
+ * Known GA4 rate/percentage metrics (e.g. bounceRate). Summing these across
+ * rows is meaningless, so renderers skip them in the Totals section. Matches
+ * plain names ("bounceRate") and suffixed key-event rates
+ * ("sessionKeyEventRate:purchase").
+ */
+export function isRateMetric(name: string): boolean {
+  return /Rate(:|$)/.test(name);
+}
+
 /** Options for building a runReport request body. */
 export interface ReportOptions {
-  /** Number of trailing days to cover (the range is `${days}daysAgo`..today). */
+  /**
+   * Number of trailing complete days to cover. The range is
+   * `${days}daysAgo`..yesterday, i.e. exactly `days` full days, excluding
+   * today's partial data.
+   */
   days: number;
   /** Metric names to request. */
   metrics: string[];
@@ -22,7 +36,7 @@ export interface ReportOptions {
 /** Build the JSON body for a GA4 `properties.runReport` call (pure). */
 export function buildRunReportBody(opts: ReportOptions): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    dateRanges: [{ startDate: `${opts.days}daysAgo`, endDate: "today" }],
+    dateRanges: [{ startDate: `${opts.days}daysAgo`, endDate: "yesterday" }],
     metrics: opts.metrics.map((name) => ({ name })),
   };
   if (opts.dimensions && opts.dimensions.length > 0) {

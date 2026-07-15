@@ -17,6 +17,7 @@ export {
   buildRunReportBody,
   parseReport,
   totalsByMetric,
+  isRateMetric,
   formatGaDate,
 } from "./report.js";
 export type { ReportOptions, RunReportResponse } from "./report.js";

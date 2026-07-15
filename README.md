@@ -10,7 +10,7 @@ Google Analytics UI:
 
 ```console
 $ ga4 --property 123456789
-# GA4 property 123456789 — last 7 days
+# GA4 property 123456789 — last 7 complete days (excluding today)
 
 ## Totals
 - Users: 4,210
@@ -59,7 +59,7 @@ npm link   # optional: puts the `ga4` command on your PATH
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-ga4 --property 123456789                 # last 7 days
+ga4 --property 123456789                 # last 7 complete days
 ga4 --property 123456789 --days 30 --top 10
 ga4 --property 123456789 --format json -o week.json
 GA_PROPERTY_ID=123456789 ga4             # property via env
@@ -68,13 +68,22 @@ GA_PROPERTY_ID=123456789 ga4             # property via env
 | Option | Description | Default |
 | --- | --- | --- |
 | `--property <id>` | GA4 numeric property id (or `GA_PROPERTY_ID`) | required |
-| `--days <n>` | Trailing days to report | `7` |
+| `--days <n>` | Trailing complete days to report (`--days 7` covers the 7 most recent full days, excluding today's partial data) | `7` |
 | `--metrics <list>` | Comma list of GA4 metric names | `totalUsers,sessions,screenPageViews,newUsers` |
 | `--top <n>` | Also list the top n pages by pageviews | off |
 | `--key-file <path>` | Service-account JSON key (or `GOOGLE_APPLICATION_CREDENTIALS`) | — |
 | `--token <token>` | Use an OAuth access token directly (or `GA_ACCESS_TOKEN`) | — |
 | `--format <md\|json>` | Output format | `md` |
 | `-o, --output <file>` | Write to a file | stdout |
+
+Notes:
+
+- Date range: `--days N` reports the N most recent complete days
+  (`NdaysAgo`..`yesterday` in GA4 terms). Today's partial data is excluded so
+  numbers do not shift as the day progresses.
+- Totals: rate metrics such as `bounceRate` or `engagementRate` cannot be
+  summed across days, so the Totals section shows `avg n/a (rate metric)` in
+  Markdown and `null` in JSON for them instead of a misleading sum.
 
 ### Authentication options
 

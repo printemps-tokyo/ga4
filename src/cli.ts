@@ -18,7 +18,7 @@ and pageviews for a GA4 property.
 
 Options:
   --property <id>     GA4 numeric property id (or env GA_PROPERTY_ID)
-  --days <n>          Trailing days to report (default: 7)
+  --days <n>          Trailing complete days to report, excluding today (default: 7)
   --metrics <list>    Comma list of GA4 metric names
                       (default: ${DEFAULT_METRICS.join(",")})
   --top <n>           Also list the top n pages by pageviews

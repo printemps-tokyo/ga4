@@ -23,13 +23,31 @@ const topPages: Report = {
 describe("renderMarkdown", () => {
   it("shows totals, a daily table, and top pages", () => {
     const md = renderMarkdown({ propertyId: "123", days: 7, daily, topPages });
-    expect(md).toContain("# GA4 property 123 — last 7 days");
+    expect(md).toContain("# GA4 property 123 — last 7 complete days (excluding today)");
     expect(md).toContain("- Users: 1,500"); // 1200 + 300
     expect(md).toContain("- Pageviews: 5,100"); // 4000 + 1100
     expect(md).toContain("| Date | Users | Sessions | Pageviews | New users |");
     expect(md).toContain("| 2026-06-15 | 1,200 | 1,500 | 4,000 | 800 |");
     expect(md).toContain("## Top pages");
     expect(md).toContain("1. / — 3,000");
+  });
+
+  it("labels rate metrics as not summable in Totals", () => {
+    const md = renderMarkdown({
+      propertyId: "123",
+      days: 7,
+      daily: {
+        metricNames: ["sessions", "bounceRate"],
+        dimensionNames: ["date"],
+        rows: [
+          { dimensions: ["20260615"], metrics: [100, 0.4] },
+          { dimensions: ["20260616"], metrics: [50, 0.6] },
+        ],
+      },
+    });
+    expect(md).toContain("- Sessions: 150");
+    expect(md).toContain("- bounceRate: avg n/a (rate metric)");
+    expect(md).not.toContain("- bounceRate: 1");
   });
 
   it("omits the daily table when there are no rows", () => {
@@ -55,5 +73,20 @@ describe("renderJson", () => {
       newUsers: 800,
     });
     expect(parsed.topPages[0]).toEqual({ path: "/", views: 3000 });
+  });
+
+  it("emits null totals for rate metrics", () => {
+    const parsed = JSON.parse(
+      renderJson({
+        propertyId: "123",
+        days: 7,
+        daily: {
+          metricNames: ["sessions", "engagementRate"],
+          dimensionNames: ["date"],
+          rows: [{ dimensions: ["20260615"], metrics: [100, 0.7] }],
+        },
+      }),
+    );
+    expect(parsed.totals).toEqual({ sessions: 100, engagementRate: null });
   });
 });
