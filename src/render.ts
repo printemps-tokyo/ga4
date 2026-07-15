@@ -25,11 +25,13 @@ export interface RenderInput {
   days: number;
   daily: Report;
   topPages?: Report;
+  /** Sessions broken down by default channel group (from --channels). */
+  channels?: Report;
 }
 
 /** Render the GA4 digest as Markdown. */
 export function renderMarkdown(input: RenderInput): string {
-  const { propertyId, days, daily, topPages } = input;
+  const { propertyId, days, daily, topPages, channels } = input;
   const totals = totalsByMetric(daily);
   const lines: string[] = [`# GA4 property ${propertyId} — last ${days} complete days (excluding today)`, ""];
 
@@ -62,12 +64,21 @@ export function renderMarkdown(input: RenderInput): string {
     lines.push("");
   }
 
+  // Optional traffic-source breakdown.
+  if (channels && channels.rows.length > 0) {
+    lines.push("## Channels");
+    channels.rows.forEach((row, i) => {
+      lines.push(`${i + 1}. ${row.dimensions[0] ?? "(unknown)"} — ${num(row.metrics[0] ?? 0)}`);
+    });
+    lines.push("");
+  }
+
   return lines.join("\n").replace(/\n+$/, "\n");
 }
 
 /** Render the GA4 digest as JSON. */
 export function renderJson(input: RenderInput): string {
-  const { propertyId, days, daily, topPages } = input;
+  const { propertyId, days, daily, topPages, channels } = input;
   const totals = totalsByMetric(daily);
   return (
     JSON.stringify(
@@ -87,6 +98,14 @@ export function renderJson(input: RenderInput): string {
               topPages: topPages.rows.map((row) => ({
                 path: row.dimensions[0] ?? "",
                 views: row.metrics[0] ?? 0,
+              })),
+            }
+          : {}),
+        ...(channels
+          ? {
+              channels: channels.rows.map((row) => ({
+                channel: row.dimensions[0] ?? "",
+                sessions: row.metrics[0] ?? 0,
               })),
             }
           : {}),

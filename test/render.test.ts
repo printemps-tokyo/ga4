@@ -20,6 +20,15 @@ const topPages: Report = {
   ],
 };
 
+const channels: Report = {
+  metricNames: ["sessions"],
+  dimensionNames: ["sessionDefaultChannelGroup"],
+  rows: [
+    { dimensions: ["Organic Search"], metrics: [900] },
+    { dimensions: ["Direct"], metrics: [400] },
+  ],
+};
+
 describe("renderMarkdown", () => {
   it("shows totals, a daily table, and top pages", () => {
     const md = renderMarkdown({ propertyId: "123", days: 7, daily, topPages });
@@ -30,6 +39,18 @@ describe("renderMarkdown", () => {
     expect(md).toContain("| 2026-06-15 | 1,200 | 1,500 | 4,000 | 800 |");
     expect(md).toContain("## Top pages");
     expect(md).toContain("1. / — 3,000");
+  });
+
+  it("renders a Channels section when a channels report is given", () => {
+    const md = renderMarkdown({ propertyId: "123", days: 7, daily, channels });
+    expect(md).toContain("## Channels");
+    expect(md).toContain("1. Organic Search — 900");
+    expect(md).toContain("2. Direct — 400");
+  });
+
+  it("omits the Channels section when no channels report is given", () => {
+    const md = renderMarkdown({ propertyId: "123", days: 7, daily });
+    expect(md).not.toContain("## Channels");
   });
 
   it("labels rate metrics as not summable in Totals", () => {
@@ -73,6 +94,19 @@ describe("renderJson", () => {
       newUsers: 800,
     });
     expect(parsed.topPages[0]).toEqual({ path: "/", views: 3000 });
+  });
+
+  it("emits a channels array when a channels report is given", () => {
+    const parsed = JSON.parse(renderJson({ propertyId: "123", days: 7, daily, channels }));
+    expect(parsed.channels).toEqual([
+      { channel: "Organic Search", sessions: 900 },
+      { channel: "Direct", sessions: 400 },
+    ]);
+  });
+
+  it("omits the channels field when no channels report is given", () => {
+    const parsed = JSON.parse(renderJson({ propertyId: "123", days: 7, daily }));
+    expect(parsed).not.toHaveProperty("channels");
   });
 
   it("emits null totals for rate metrics", () => {

@@ -22,6 +22,8 @@ Options:
   --metrics <list>    Comma list of GA4 metric names
                       (default: ${DEFAULT_METRICS.join(",")})
   --top <n>           Also list the top n pages by pageviews
+  --channels [n]      Also break down sessions by default channel group
+                      (top n channels, default: 10)
   --key-file <path>   Service-account JSON key (or env GOOGLE_APPLICATION_CREDENTIALS)
   --token <token>     Use this OAuth access token directly (or env GA_ACCESS_TOKEN)
   --format <md|json>  Output format (default: md)
@@ -80,6 +82,16 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  // --channels takes an optional value (default 10), but parseArgs requires a
+  // value for string options, so insert the default before parsing.
+  const channelsAt = argv.indexOf("--channels");
+  if (channelsAt !== -1) {
+    const next = argv[channelsAt + 1];
+    if (next === undefined || next.startsWith("-")) {
+      argv.splice(channelsAt + 1, 0, "10");
+    }
+  }
+
   let values;
   try {
     values = parseArgs({
@@ -90,6 +102,7 @@ async function main(): Promise<number> {
         days: { type: "string" },
         metrics: { type: "string" },
         top: { type: "string" },
+        channels: { type: "string" },
         "key-file": { type: "string" },
         token: { type: "string" },
         format: { type: "string" },
@@ -117,6 +130,11 @@ async function main(): Promise<number> {
     process.stderr.write("error: --top must be a positive integer\n");
     return 1;
   }
+  const channelCount = values.channels ? Number(values.channels) : undefined;
+  if (channelCount !== undefined && (!Number.isInteger(channelCount) || channelCount < 1)) {
+    process.stderr.write("error: --channels must be a positive integer\n");
+    return 1;
+  }
   const format = values.format ?? "md";
   if (format !== "md" && format !== "json") {
     process.stderr.write("error: --format must be md or json\n");
@@ -133,6 +151,7 @@ async function main(): Promise<number> {
 
   let daily: Report;
   let topPages: Report | undefined;
+  let channels: Report | undefined;
   try {
     const dailyBody = buildRunReportBody({ days, metrics, dimensions: ["date"], orderByDimensionAsc: "date" });
     daily = parseReport(await runReport(propertyId, dailyBody, token));
@@ -146,12 +165,22 @@ async function main(): Promise<number> {
       });
       topPages = parseReport(await runReport(propertyId, topBody, token));
     }
+    if (channelCount !== undefined) {
+      const channelsBody = buildRunReportBody({
+        days,
+        metrics: ["sessions"],
+        dimensions: ["sessionDefaultChannelGroup"],
+        limit: channelCount,
+        orderByMetricDesc: "sessions",
+      });
+      channels = parseReport(await runReport(propertyId, channelsBody, token));
+    }
   } catch (err) {
     process.stderr.write(`error: ${(err as Error).message}\n`);
     return 1;
   }
 
-  const input = { propertyId, days, daily, topPages };
+  const input = { propertyId, days, daily, topPages, channels };
   const output = format === "json" ? renderJson(input) : renderMarkdown(input);
   if (values.output) {
     try {

@@ -41,6 +41,20 @@ describe("buildRunReportBody", () => {
     expect(body.limit).toBe("5");
     expect(body.orderBys).toEqual([{ desc: true, metric: { metricName: "screenPageViews" } }]);
   });
+
+  it("builds a channels request grouped by default channel group", () => {
+    const body = buildRunReportBody({
+      days: 7,
+      metrics: ["sessions"],
+      dimensions: ["sessionDefaultChannelGroup"],
+      limit: 10,
+      orderByMetricDesc: "sessions",
+    });
+    expect(body.dateRanges).toEqual([{ startDate: "7daysAgo", endDate: "yesterday" }]);
+    expect(body.dimensions).toEqual([{ name: "sessionDefaultChannelGroup" }]);
+    expect(body.limit).toBe("10");
+    expect(body.orderBys).toEqual([{ desc: true, metric: { metricName: "sessions" } }]);
+  });
 });
 
 describe("parseReport / totalsByMetric", () => {

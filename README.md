@@ -61,6 +61,8 @@ npm link   # optional: puts the `ga4` command on your PATH
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ga4 --property 123456789                 # last 7 complete days
 ga4 --property 123456789 --days 30 --top 10
+ga4 --property 123456789 --channels        # sessions by channel group (top 10)
+ga4 --property 123456789 --channels 5      # top 5 channels only
 ga4 --property 123456789 --format json -o week.json
 GA_PROPERTY_ID=123456789 ga4             # property via env
 ```
@@ -71,6 +73,7 @@ GA_PROPERTY_ID=123456789 ga4             # property via env
 | `--days <n>` | Trailing complete days to report (`--days 7` covers the 7 most recent full days, excluding today's partial data) | `7` |
 | `--metrics <list>` | Comma list of GA4 metric names | `totalUsers,sessions,screenPageViews,newUsers` |
 | `--top <n>` | Also list the top n pages by pageviews | off |
+| `--channels [n]` | Also break down sessions by default channel group (top n channels; n defaults to `10`) | off |
 | `--key-file <path>` | Service-account JSON key (or `GOOGLE_APPLICATION_CREDENTIALS`) | — |
 | `--token <token>` | Use an OAuth access token directly (or `GA_ACCESS_TOKEN`) | — |
 | `--format <md\|json>` | Output format | `md` |
