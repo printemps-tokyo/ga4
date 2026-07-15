@@ -7,6 +7,7 @@ import { DEFAULT_METRICS, buildRunReportBody, parseReport } from "./report.js";
 import { runReport } from "./api.js";
 import { renderJson, renderMarkdown } from "./render.js";
 import type { Report, ServiceAccount } from "./types.js";
+import { usageError } from "./usage.js";
 
 const HELP = `ga4 - check a GA4 property's recent traffic from the terminal
 
@@ -110,7 +111,7 @@ async function main(): Promise<number> {
       },
     }).values;
   } catch (err) {
-    process.stderr.write(`error: ${(err as Error).message}\n`);
+    process.stderr.write(usageError(err, "ga4"));
     return 1;
   }
 
