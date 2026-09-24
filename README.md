@@ -42,7 +42,10 @@ prints a Markdown or JSON digest. No runtime dependencies.
 3. In GA4: Admin -> Property access management -> add the service account's
    email (`...@...iam.gserviceaccount.com`) as a Viewer.
 4. Find your numeric property id in GA4: Admin -> Property settings (a number
-   like `123456789`, not the `G-XXXXXXXX` measurement id).
+   like `123456789`, not the `G-XXXXXXXX` measurement id), or run `ga4 --list`
+   (step 5).
+5. Optional, for `ga4 --list`: also enable the Google Analytics Admin API in
+   the same project.
 
 ## Install
 
@@ -65,11 +68,29 @@ ga4 --property 123456789 --channels        # sessions by channel group (top 10)
 ga4 --property 123456789 --channels 5      # top 5 channels only
 ga4 --property 123456789 --format json -o week.json
 GA_PROPERTY_ID=123456789 ga4             # property via env
+ga4 --list                                 # accounts and properties you can see
+ga4 --list --format json
+```
+
+`--list` prints every account and property the credentials can read, with
+their numeric ids, through the Admin API's `accountSummaries.list`:
+
+```console
+$ ga4 --list
+# GA4 accounts and properties
+
+## Example account (123456)
+
+| Property | ID |
+| --- | --- |
+| example.com | 123456789 |
+| blog.example.com | 987654321 |
 ```
 
 | Option | Description | Default |
 | --- | --- | --- |
-| `--property <id>` | GA4 numeric property id (or `GA_PROPERTY_ID`) | required |
+| `--list` | List visible accounts and properties (names and ids), then exit. Needs the Admin API enabled; cannot be combined with report options | off |
+| `--property <id>` | GA4 numeric property id (or `GA_PROPERTY_ID`) | required (except with `--list`) |
 | `--days <n>` | Trailing complete days to report (`--days 7` covers the 7 most recent full days, excluding today's partial data) | `7` |
 | `--metrics <list>` | Comma list of GA4 metric names | `totalUsers,sessions,screenPageViews,newUsers` |
 | `--top <n>` | Also list the top n pages by pageviews | off |

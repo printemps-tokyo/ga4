@@ -5,7 +5,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { requestAccessToken } from "./auth.js";
 import { DEFAULT_METRICS, buildRunReportBody, parseReport } from "./report.js";
 import { runReport } from "./api.js";
-import { renderJson, renderMarkdown } from "./render.js";
+import { renderAccountsJson, renderAccountsMarkdown, renderJson, renderMarkdown } from "./render.js";
+import { listAccountSummaries, parseAccountSummaries } from "./admin.js";
 import type { Report, ServiceAccount } from "./types.js";
 import { usageError } from "./usage.js";
 
@@ -13,11 +14,15 @@ const HELP = `ga4 - check a GA4 property's recent traffic from the terminal
 
 Usage:
   ga4 --property <id> [options]
+  ga4 --list [--format md|json] [-o <file>]
 
 Authenticates with a Google service account and prints recent users, sessions,
 and pageviews for a GA4 property.
 
 Options:
+  --list              List the accounts and properties (names and ids) these
+                      credentials can see, then exit. Needs the Google
+                      Analytics Admin API enabled in the key's project.
   --property <id>     GA4 numeric property id (or env GA_PROPERTY_ID)
   --days <n>          Trailing complete days to report, excluding today (default: 7)
   --metrics <list>    Comma list of GA4 metric names
@@ -72,6 +77,57 @@ async function resolveToken(keyFile: string | undefined, token: string | undefin
   return requestAccessToken(sa);
 }
 
+/** Write output to --output or stdout. Returns an exit code. */
+async function emit(output: string, file: string | undefined): Promise<number> {
+  if (file) {
+    try {
+      await writeFile(file, output, "utf8");
+    } catch (err) {
+      process.stderr.write(`error: cannot write "${file}": ${(err as Error).message}\n`);
+      return 1;
+    }
+    process.stderr.write(`ga4: wrote ${file}\n`);
+  } else {
+    process.stdout.write(output);
+  }
+  return 0;
+}
+
+/** `ga4 --list`: accounts and properties visible to the credentials. */
+async function listMode(values: {
+  property?: string;
+  days?: string;
+  metrics?: string;
+  top?: string;
+  channels?: string;
+  "key-file"?: string;
+  token?: string;
+  format?: string;
+  output?: string;
+}): Promise<number> {
+  const reportOnly = ["property", "days", "metrics", "top", "channels"] as const;
+  const given = reportOnly.filter((k) => values[k] !== undefined);
+  if (given.length > 0) {
+    process.stderr.write(`error: --list cannot be combined with ${given.map((k) => `--${k}`).join(", ")}\n`);
+    return 1;
+  }
+  const format = values.format ?? "md";
+  if (format !== "md" && format !== "json") {
+    process.stderr.write("error: --format must be md or json\n");
+    return 1;
+  }
+  let accounts;
+  try {
+    const token = await resolveToken(values["key-file"], values.token);
+    accounts = parseAccountSummaries(await listAccountSummaries(token));
+  } catch (err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    return 1;
+  }
+  const output = format === "json" ? renderAccountsJson(accounts) : renderAccountsMarkdown(accounts);
+  return emit(output, values.output);
+}
+
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   if (argv.includes("-h") || argv.includes("--help")) {
@@ -99,6 +155,7 @@ async function main(): Promise<number> {
       args: argv,
       allowPositionals: false,
       options: {
+        list: { type: "boolean" },
         property: { type: "string" },
         days: { type: "string" },
         metrics: { type: "string" },
@@ -113,6 +170,10 @@ async function main(): Promise<number> {
   } catch (err) {
     process.stderr.write(usageError(err, "ga4"));
     return 1;
+  }
+
+  if (values.list) {
+    return listMode(values);
   }
 
   const propertyId = values.property ?? process.env.GA_PROPERTY_ID;
@@ -190,18 +251,7 @@ async function main(): Promise<number> {
 
   const input = { propertyId, days, daily, topPages, channels };
   const output = format === "json" ? renderJson(input) : renderMarkdown(input);
-  if (values.output) {
-    try {
-      await writeFile(values.output, output, "utf8");
-    } catch (err) {
-      process.stderr.write(`error: cannot write "${values.output}": ${(err as Error).message}\n`);
-      return 1;
-    }
-    process.stderr.write(`ga4: wrote ${values.output}\n`);
-  } else {
-    process.stdout.write(output);
-  }
-  return 0;
+  return emit(output, values.output);
 }
 
 main()

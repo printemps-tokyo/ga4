@@ -1,4 +1,5 @@
 import type { Report } from "./types.js";
+import type { AccountEntry } from "./admin.js";
 import { formatGaDate, isRateMetric, reportTotals, totalsByMetric } from "./report.js";
 
 /** Friendly column labels for the common GA4 metric names. */
@@ -134,4 +135,41 @@ export function renderJson(input: RenderInput): string {
       2,
     ) + "\n"
   );
+}
+
+/** Short label for a non-ordinary property type (subproperty, roll-up). */
+function propertyTypeNote(type: string | undefined): string {
+  if (!type || type === "PROPERTY_TYPE_ORDINARY" || type === "PROPERTY_TYPE_UNSPECIFIED") {
+    return "";
+  }
+  return ` (${type.replace(/^PROPERTY_TYPE_/, "").toLowerCase()})`;
+}
+
+/** Render `--list` output as Markdown: one table of properties per account. */
+export function renderAccountsMarkdown(accounts: AccountEntry[]): string {
+  const lines: string[] = ["# GA4 accounts and properties", ""];
+  if (accounts.length === 0) {
+    lines.push(
+      "No accounts are visible to these credentials. Add the service account's email to a GA4 account or property (Admin -> Access management).",
+    );
+    return lines.join("\n") + "\n";
+  }
+  for (const account of accounts) {
+    lines.push(`## ${account.name} (${account.id})`, "");
+    if (account.properties.length === 0) {
+      lines.push("No properties visible in this account.", "");
+      continue;
+    }
+    lines.push("| Property | ID |", "| --- | --- |");
+    for (const p of account.properties) {
+      lines.push(`| ${p.name}${propertyTypeNote(p.type)} | ${p.id} |`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n").replace(/\n+$/, "\n");
+}
+
+/** Render `--list` output as JSON. */
+export function renderAccountsJson(accounts: AccountEntry[]): string {
+  return JSON.stringify({ accounts }, null, 2) + "\n";
 }
