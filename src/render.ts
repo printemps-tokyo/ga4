@@ -1,5 +1,6 @@
 import type { Report } from "./types.js";
 import type { AccountEntry } from "./admin.js";
+import type { PropertyTotals } from "./all.js";
 import { formatGaDate, isRateMetric, reportTotals, totalsByMetric } from "./report.js";
 
 /** Friendly column labels for the common GA4 metric names. */
@@ -172,4 +173,55 @@ export function renderAccountsMarkdown(accounts: AccountEntry[]): string {
 /** Render `--list` output as JSON. */
 export function renderAccountsJson(accounts: AccountEntry[]): string {
   return JSON.stringify({ accounts }, null, 2) + "\n";
+}
+
+/** Render `--all` output as Markdown: one row per property. */
+export function renderAllMarkdown(rows: PropertyTotals[], days: number, metricNames: string[]): string {
+  const lines: string[] = [`# GA4 — all properties, last ${days} complete days (excluding today)`, ""];
+  if (rows.length === 0) {
+    lines.push("No properties are visible to these credentials.");
+    return lines.join("\n") + "\n";
+  }
+  lines.push(`| Account | Property | ID | ${metricNames.map(label).join(" | ")} |`);
+  lines.push(`| --- | --- | --- | ${metricNames.map(() => "---:").join(" | ")} |`);
+  for (const r of rows) {
+    const cells = r.values
+      ? r.values.map((v, i) => metricValue(metricNames[i] ?? "", v))
+      : metricNames.map(() => "error");
+    lines.push(`| ${r.accountName} | ${r.propertyName} | ${r.propertyId} | ${cells.join(" | ")} |`);
+  }
+  const failed = rows.filter((r) => r.error);
+  if (failed.length > 0) {
+    lines.push("", "## Errors");
+    for (const r of failed) {
+      lines.push(`- ${r.propertyName} (${r.propertyId}): ${r.error}`);
+    }
+  }
+  lines.push(
+    "",
+    "Each row is GA4's own total for that property over the range. Rows are not added up: the same person counts once per property they visit.",
+  );
+  return lines.join("\n") + "\n";
+}
+
+/** Render `--all` output as JSON. */
+export function renderAllJson(rows: PropertyTotals[], days: number, metricNames: string[]): string {
+  return (
+    JSON.stringify(
+      {
+        days,
+        properties: rows.map((r) => ({
+          accountId: r.accountId,
+          accountName: r.accountName,
+          propertyId: r.propertyId,
+          propertyName: r.propertyName,
+          ...(r.values
+            ? { totals: Object.fromEntries(metricNames.map((m, i) => [m, r.values?.[i] ?? 0])) }
+            : { error: r.error ?? "unknown error" }),
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
 }

@@ -5,16 +5,28 @@ import { readFile, writeFile } from "node:fs/promises";
 import { requestAccessToken } from "./auth.js";
 import { DEFAULT_METRICS, buildRunReportBody, parseReport } from "./report.js";
 import { runReport } from "./api.js";
-import { renderAccountsJson, renderAccountsMarkdown, renderJson, renderMarkdown } from "./render.js";
+import {
+  renderAccountsJson,
+  renderAccountsMarkdown,
+  renderAllJson,
+  renderAllMarkdown,
+  renderJson,
+  renderMarkdown,
+} from "./render.js";
 import { listAccountSummaries, parseAccountSummaries } from "./admin.js";
+import { collectTotals } from "./all.js";
 import type { Report, ServiceAccount } from "./types.js";
 import { usageError } from "./usage.js";
+
+/** Default metrics for --all: the quick "how much traffic" trio. */
+const ALL_METRICS = ["totalUsers", "sessions", "screenPageViews"];
 
 const HELP = `ga4 - check a GA4 property's recent traffic from the terminal
 
 Usage:
   ga4 --property <id> [options]
   ga4 --list [--format md|json] [-o <file>]
+  ga4 --all [--days <n>] [--metrics <list>] [--format md|json] [-o <file>]
 
 Authenticates with a Google service account and prints recent users, sessions,
 and pageviews for a GA4 property.
@@ -23,6 +35,9 @@ Options:
   --list              List the accounts and properties (names and ids) these
                       credentials can see, then exit. Needs the Google
                       Analytics Admin API enabled in the key's project.
+  --all               One row per visible property: GA4's totals for the range
+                      (default metrics: ${ALL_METRICS.join(",")}).
+                      Needs the Admin API too, like --list.
   --property <id>     GA4 numeric property id (or env GA_PROPERTY_ID)
   --days <n>          Trailing complete days to report, excluding today (default: 7)
   --metrics <list>    Comma list of GA4 metric names
@@ -128,6 +143,53 @@ async function listMode(values: {
   return emit(output, values.output);
 }
 
+/** `ga4 --all`: range totals for every visible property. */
+async function allMode(values: {
+  property?: string;
+  days?: string;
+  metrics?: string;
+  top?: string;
+  channels?: string;
+  "key-file"?: string;
+  token?: string;
+  format?: string;
+  output?: string;
+}): Promise<number> {
+  const reportOnly = ["property", "top", "channels"] as const;
+  const given = reportOnly.filter((k) => values[k] !== undefined);
+  if (given.length > 0) {
+    process.stderr.write(`error: --all cannot be combined with ${given.map((k) => `--${k}`).join(", ")}\n`);
+    return 1;
+  }
+  const days = values.days ? Number(values.days) : 7;
+  if (!Number.isInteger(days) || days < 1) {
+    process.stderr.write("error: --days must be a positive integer\n");
+    return 1;
+  }
+  const metrics = values.metrics ? values.metrics.split(",").map((s) => s.trim()) : ALL_METRICS;
+  const format = values.format ?? "md";
+  if (format !== "md" && format !== "json") {
+    process.stderr.write("error: --format must be md or json\n");
+    return 1;
+  }
+  let rows;
+  try {
+    const token = await resolveToken(values["key-file"], values.token);
+    const accounts = parseAccountSummaries(await listAccountSummaries(token));
+    // No dimensions: the single row is GA4's deduplicated total for the range.
+    const body = buildRunReportBody({ days, metrics });
+    rows = await collectTotals(accounts, metrics, async (id) => parseReport(await runReport(id, body, token)));
+  } catch (err) {
+    process.stderr.write(`error: ${(err as Error).message}\n`);
+    return 1;
+  }
+  const output =
+    format === "json" ? renderAllJson(rows, days, metrics) : renderAllMarkdown(rows, days, metrics);
+  const code = await emit(output, values.output);
+  // A property that failed is reported in the output, and the run fails.
+  return code !== 0 ? code : rows.some((r) => r.error) ? 1 : 0;
+}
+
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   if (argv.includes("-h") || argv.includes("--help")) {
@@ -156,6 +218,7 @@ async function main(): Promise<number> {
       allowPositionals: false,
       options: {
         list: { type: "boolean" },
+        all: { type: "boolean" },
         property: { type: "string" },
         days: { type: "string" },
         metrics: { type: "string" },
@@ -172,8 +235,15 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  if (values.list && values.all) {
+    process.stderr.write("error: --list and --all cannot be combined\n");
+    return 1;
+  }
   if (values.list) {
     return listMode(values);
+  }
+  if (values.all) {
+    return allMode(values);
   }
 
   const propertyId = values.property ?? process.env.GA_PROPERTY_ID;

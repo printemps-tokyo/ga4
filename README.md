@@ -70,7 +70,23 @@ ga4 --property 123456789 --format json -o week.json
 GA_PROPERTY_ID=123456789 ga4             # property via env
 ga4 --list                                 # accounts and properties you can see
 ga4 --list --format json
+ga4 --all --days 3                         # every property, one row each
 ```
+
+`--all` goes one step further and reports every property at once:
+
+```console
+$ ga4 --all --days 3
+# GA4 — all properties, last 3 complete days (excluding today)
+
+| Account | Property | ID | Users | Sessions | Pageviews |
+| --- | --- | --- | ---: | ---: | ---: |
+| Example account | example.com | 123456789 | 369 | 471 | 2,240 |
+| Example account | blog.example.com | 987654321 | 224 | 266 | 288 |
+```
+
+Each row is that property's own GA4 total for the range (users and sessions
+deduplicated), so rows are not added up across properties.
 
 `--list` prints every account and property the credentials can read, with
 their numeric ids, through the Admin API's `accountSummaries.list`:
@@ -90,7 +106,8 @@ $ ga4 --list
 | Option | Description | Default |
 | --- | --- | --- |
 | `--list` | List visible accounts and properties (names and ids), then exit. Needs the Admin API enabled; cannot be combined with report options | off |
-| `--property <id>` | GA4 numeric property id (or `GA_PROPERTY_ID`) | required (except with `--list`) |
+| `--all` | One row per visible property with GA4's range totals (default metrics `totalUsers,sessions,screenPageViews`; `--days`, `--metrics`, `--format`, `-o` apply). Needs the Admin API, like `--list`. Exits 1 if any property fails, after printing the rest | off |
+| `--property <id>` | GA4 numeric property id (or `GA_PROPERTY_ID`) | required (except with `--list` / `--all`) |
 | `--days <n>` | Trailing complete days to report (`--days 7` covers the 7 most recent full days, excluding today's partial data) | `7` |
 | `--metrics <list>` | Comma list of GA4 metric names | `totalUsers,sessions,screenPageViews,newUsers` |
 | `--top <n>` | Also list the top n pages by pageviews | off |

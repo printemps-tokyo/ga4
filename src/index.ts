@@ -25,7 +25,17 @@ export type { ReportOptions, RunReportResponse } from "./report.js";
 
 export { runReport, normalizePropertyId } from "./api.js";
 
-export { renderMarkdown, renderJson, renderAccountsMarkdown, renderAccountsJson } from "./render.js";
+export {
+  renderMarkdown,
+  renderJson,
+  renderAccountsMarkdown,
+  renderAccountsJson,
+  renderAllMarkdown,
+  renderAllJson,
+} from "./render.js";
+
+export { collectTotals } from "./all.js";
+export type { PropertyTotals, PropertyReporter } from "./all.js";
 
 export { listAccountSummaries, parseAccountSummaries } from "./admin.js";
 export type { AccountEntry, PropertyEntry, AccountSummariesResponse } from "./admin.js";
