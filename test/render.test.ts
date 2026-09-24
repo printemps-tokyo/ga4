@@ -124,3 +124,58 @@ describe("renderJson", () => {
     expect(parsed.totals).toEqual({ sessions: 100, engagementRate: null });
   });
 });
+
+describe("GA4 totals in the output", () => {
+  const withTotals: Report = {
+    metricNames: ["totalUsers", "sessions", "bounceRate"],
+    dimensionNames: ["date"],
+    rows: [
+      { dimensions: ["20260923"], metrics: [154, 184, 0.6] },
+      { dimensions: ["20260924"], metrics: [238, 286, 0.7] },
+    ],
+    totals: [369, 471, 0.658],
+  };
+  const channelsWithTotal: Report = {
+    metricNames: ["sessions"],
+    dimensionNames: ["sessionDefaultChannelGroup"],
+    rows: [
+      { dimensions: ["Organic Search"], metrics: [257] },
+      { dimensions: ["Unassigned"], metrics: [162] },
+      { dimensions: ["Cross-network"], metrics: [117] },
+    ],
+    totals: [471],
+  };
+
+  it("uses GA4's totals, including a period-level rate", () => {
+    const md = renderMarkdown({ propertyId: "1", days: 3, daily: withTotals });
+    expect(md).toContain("- Users: 369");
+    expect(md).toContain("- Sessions: 471");
+    expect(md).toContain("- bounceRate: 65.8%");
+    // Daily rate cells are percentages too, not rounded to 0 or 1.
+    expect(md).toContain("| 2026-09-23 | 154 | 184 | 60.0% |");
+  });
+
+  it("shows the channel total and explains rows that add up to more", () => {
+    const md = renderMarkdown({ propertyId: "1", days: 3, daily: withTotals, channels: channelsWithTotal });
+    expect(md).toContain("Total sessions: 471");
+    expect(md).toContain("Rows add up to 536");
+  });
+
+  it("does not add the note when rows do not exceed the total", () => {
+    const md = renderMarkdown({
+      propertyId: "1",
+      days: 3,
+      daily: withTotals,
+      channels: { ...channelsWithTotal, totals: [536] },
+    });
+    expect(md).toContain("Total sessions: 536");
+    expect(md).not.toContain("Rows add up to");
+  });
+
+  it("emits GA4's totals and the channel total in JSON", () => {
+    const parsed = JSON.parse(renderJson({ propertyId: "1", days: 3, daily: withTotals, channels: channelsWithTotal }));
+    expect(parsed.totals).toEqual({ totalUsers: 369, sessions: 471, bounceRate: 0.658 });
+    expect(parsed.channelsTotalSessions).toBe(471);
+    expect(parsed.channels).toHaveLength(3);
+  });
+});

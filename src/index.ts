@@ -17,6 +17,7 @@ export {
   buildRunReportBody,
   parseReport,
   totalsByMetric,
+  reportTotals,
   isRateMetric,
   formatGaDate,
 } from "./report.js";

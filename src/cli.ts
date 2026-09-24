@@ -154,7 +154,13 @@ async function main(): Promise<number> {
   let topPages: Report | undefined;
   let channels: Report | undefined;
   try {
-    const dailyBody = buildRunReportBody({ days, metrics, dimensions: ["date"], orderByDimensionAsc: "date" });
+    const dailyBody = buildRunReportBody({
+      days,
+      metrics,
+      dimensions: ["date"],
+      orderByDimensionAsc: "date",
+      withTotals: true,
+    });
     daily = parseReport(await runReport(propertyId, dailyBody, token));
     if (top !== undefined) {
       const topBody = buildRunReportBody({
@@ -173,6 +179,7 @@ async function main(): Promise<number> {
         dimensions: ["sessionDefaultChannelGroup"],
         limit: channelCount,
         orderByMetricDesc: "sessions",
+        withTotals: true,
       });
       channels = parseReport(await runReport(propertyId, channelsBody, token));
     }

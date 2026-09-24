@@ -31,6 +31,11 @@ export interface ReportOptions {
   orderByMetricDesc?: string;
   /** Order rows by this dimension, ascending (e.g. by date). */
   orderByDimensionAsc?: string;
+  /**
+   * Ask GA4 for deduplicated totals (`metricAggregations: ["TOTAL"]`). They
+   * cover every row, not just the ones `limit` returns.
+   */
+  withTotals?: boolean;
 }
 
 /** Build the JSON body for a GA4 `properties.runReport` call (pure). */
@@ -45,6 +50,9 @@ export function buildRunReportBody(opts: ReportOptions): Record<string, unknown>
   if (opts.limit !== undefined) {
     body.limit = String(opts.limit);
   }
+  if (opts.withTotals) {
+    body.metricAggregations = ["TOTAL"];
+  }
   if (opts.orderByMetricDesc) {
     body.orderBys = [{ desc: true, metric: { metricName: opts.orderByMetricDesc } }];
   } else if (opts.orderByDimensionAsc) {
@@ -58,6 +66,7 @@ export interface RunReportResponse {
   dimensionHeaders?: { name?: string }[];
   metricHeaders?: { name?: string }[];
   rows?: { dimensionValues?: { value?: string }[]; metricValues?: { value?: string }[] }[];
+  totals?: { dimensionValues?: { value?: string }[]; metricValues?: { value?: string }[] }[];
 }
 
 /** Parse a GA4 runReport response into a normalized {@link Report} (pure). */
@@ -68,7 +77,28 @@ export function parseReport(res: RunReportResponse): Report {
     dimensions: (row.dimensionValues ?? []).map((d) => d.value ?? ""),
     metrics: (row.metricValues ?? []).map((m) => Number(m.value ?? 0)),
   }));
+  const totalRow = res.totals?.[0];
+  if (totalRow) {
+    const totals = (totalRow.metricValues ?? []).map((m) => Number(m.value ?? 0));
+    return { metricNames, dimensionNames, rows, totals };
+  }
   return { metricNames, dimensionNames, rows };
+}
+
+/**
+ * The total for each metric (pure): GA4's own deduplicated total when the
+ * report carries one, otherwise the column sum for summable metrics and
+ * `null` for rate metrics, which cannot be summed.
+ *
+ * Prefer requesting totals: users and sessions are counted once per range,
+ * so a user active on two days is one user, not two.
+ */
+export function reportTotals(report: Report): (number | null)[] {
+  if (report.totals) {
+    return report.metricNames.map((_name, col) => report.totals?.[col] ?? 0);
+  }
+  const sums = totalsByMetric(report);
+  return report.metricNames.map((name, col) => (isRateMetric(name) ? null : (sums[col] ?? 0)));
 }
 
 /** Sum each metric column across every row (pure). */

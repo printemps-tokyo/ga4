@@ -84,9 +84,18 @@ Notes:
 - Date range: `--days N` reports the N most recent complete days
   (`NdaysAgo`..`yesterday` in GA4 terms). Today's partial data is excluded so
   numbers do not shift as the day progresses.
-- Totals: rate metrics such as `bounceRate` or `engagementRate` cannot be
-  summed across days, so the Totals section shows `avg n/a (rate metric)` in
-  Markdown and `null` in JSON for them instead of a misleading sum.
+- Totals come from GA4 itself (`metricAggregations: ["TOTAL"]`), not from
+  adding up the daily rows. GA4 counts users and sessions once per range, so
+  a user who visits on two days is one user in Totals and one in each day's
+  row: the daily rows can add up to more than the total. Rate metrics such as
+  `bounceRate` get their real period-level value and are shown as
+  percentages. See Google's
+  [session deduplication note](https://developers.google.com/analytics/devguides/collection/ga4/sessions):
+  "If you sum the rows, it yields 2 sessions, but the true property total is
+  deduplicated to 1."
+- Channels: the same applies to `--channels`. Its rows can add up to more
+  than the number of sessions, so the section also prints GA4's total
+  (`channelsTotalSessions` in JSON) and says so when the rows exceed it.
 
 ### Authentication options
 

@@ -3,6 +3,7 @@ import {
   buildRunReportBody,
   parseReport,
   totalsByMetric,
+  reportTotals,
   isRateMetric,
   formatGaDate,
   DEFAULT_METRICS,
@@ -109,5 +110,45 @@ describe("normalizePropertyId", () => {
   it("strips an optional properties/ prefix", () => {
     expect(normalizePropertyId("properties/123456789")).toBe("123456789");
     expect(normalizePropertyId(" 987654321 ")).toBe("987654321");
+  });
+});
+
+describe("GA4 totals (metricAggregations: TOTAL)", () => {
+  it("requests totals only when asked", () => {
+    const base = { days: 3, metrics: ["sessions"], dimensions: ["date"] };
+    expect(buildRunReportBody(base)).not.toHaveProperty("metricAggregations");
+    expect(buildRunReportBody({ ...base, withTotals: true }).metricAggregations).toEqual(["TOTAL"]);
+  });
+
+  // Shape and numbers from a real response for property 555503720: two days
+  // of 154 and 238 users are 369 distinct users over the range, not 392.
+  const response = {
+    dimensionHeaders: [{ name: "date" }],
+    metricHeaders: [{ name: "totalUsers" }, { name: "sessions" }, { name: "bounceRate" }],
+    rows: [
+      { dimensionValues: [{ value: "20260923" }], metricValues: [{ value: "154" }, { value: "184" }, { value: "0.6" }] },
+      { dimensionValues: [{ value: "20260924" }], metricValues: [{ value: "238" }, { value: "286" }, { value: "0.7" }] },
+    ],
+    totals: [
+      {
+        dimensionValues: [{ value: "RESERVED_TOTAL" }],
+        metricValues: [{ value: "369" }, { value: "471" }, { value: "0.658" }],
+      },
+    ],
+  };
+
+  it("parses GA4's totals row", () => {
+    expect(parseReport(response).totals).toEqual([369, 471, 0.658]);
+  });
+
+  it("prefers GA4's deduplicated totals over column sums", () => {
+    const report = parseReport(response);
+    expect(totalsByMetric(report).slice(0, 2)).toEqual([392, 470]);
+    expect(reportTotals(report)).toEqual([369, 471, 0.658]);
+  });
+
+  it("falls back to sums, with null for rate metrics, without GA4 totals", () => {
+    const withoutTotals = { ...response, totals: undefined };
+    expect(reportTotals(parseReport(withoutTotals))).toEqual([392, 470, null]);
   });
 });
