@@ -68,11 +68,20 @@ async function readVersion(): Promise<string> {
   }
 }
 
-/** Resolve an access token from an explicit token or a service-account key. */
+/**
+ * Resolve an access token. Order: --token, --key-file, then GA_ACCESS_TOKEN,
+ * then GOOGLE_APPLICATION_CREDENTIALS, so anything given on the command line
+ * wins over the environment.
+ */
 async function resolveToken(keyFile: string | undefined, token: string | undefined): Promise<string> {
-  const explicit = token ?? process.env.GA_ACCESS_TOKEN;
-  if (explicit) {
-    return explicit;
+  if (token && keyFile) {
+    throw new Error("pass either --token or --key-file, not both");
+  }
+  if (token) {
+    return token;
+  }
+  if (!keyFile && process.env.GA_ACCESS_TOKEN) {
+    return process.env.GA_ACCESS_TOKEN;
   }
   const path = keyFile ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (!path) {

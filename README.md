@@ -143,6 +143,10 @@ Notes:
 - Existing token: if you already have an access token with the
   `analytics.readonly` scope (for example from `gcloud`), pass `--token` or set
   `GA_ACCESS_TOKEN`, and no key file is needed.
+- Order: `--token`, `--key-file`, `GA_ACCESS_TOKEN`,
+  `GOOGLE_APPLICATION_CREDENTIALS`. What you pass on the command line wins
+  over the environment, so `--key-file` is used even when `GA_ACCESS_TOKEN`
+  is set; `--token` and `--key-file` together are an error.
 
 ## Security
 
