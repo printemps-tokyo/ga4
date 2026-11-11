@@ -31,7 +31,7 @@ prints a Markdown or JSON digest. No runtime dependencies.
 
 ## Requirements
 
-- Node.js >= 20
+- Node.js >= 22
 - A Google service account with read access to your GA4 property (one-time
   setup below)
 
