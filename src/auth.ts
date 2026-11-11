@@ -10,6 +10,7 @@
 
 import { createSign } from "node:crypto";
 import type { ServiceAccount } from "./types.js";
+import { exchange, type Sleep } from "./http.js";
 
 export const ANALYTICS_SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 const DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token";
@@ -50,17 +51,24 @@ export async function requestAccessToken(
   sa: ServiceAccount,
   fetchFn: typeof fetch = fetch,
   iatSec: number = Math.floor(Date.now() / 1000),
+  sleep?: Sleep,
 ): Promise<string> {
   const assertion = createAssertion(sa, ANALYTICS_SCOPE, iatSec);
-  const res = await fetchFn(sa.token_uri ?? DEFAULT_TOKEN_URI, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-  const text = await res.text();
+  // Same timeout and retry as the API calls (see http.ts).
+  const res = await exchange(
+    sa.token_uri ?? DEFAULT_TOKEN_URI,
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion,
+      }).toString(),
+    },
+    fetchFn,
+    sleep,
+  );
+  const text = res.text;
   if (!res.ok) {
     throw new Error(`token request failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }

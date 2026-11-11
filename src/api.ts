@@ -1,3 +1,4 @@
+import { exchange, type Sleep } from "./http.js";
 import type { RunReportResponse } from "./report.js";
 
 /** Strip an optional "properties/" prefix, leaving the numeric property id. */
@@ -11,15 +12,21 @@ export async function runReport(
   body: Record<string, unknown>,
   token: string,
   fetchFn: typeof fetch = fetch,
+  sleep?: Sleep,
 ): Promise<RunReportResponse> {
   const id = normalizePropertyId(propertyId);
   const url = `https://analyticsdata.googleapis.com/v1beta/properties/${id}:runReport`;
-  const res = await fetchFn(url, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
+  const res = await exchange(
+    url,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    fetchFn,
+    sleep,
+  );
+  const text = res.text;
   if (!res.ok) {
     throw new Error(`runReport failed (HTTP ${res.status}): ${text.slice(0, 400)}`);
   }

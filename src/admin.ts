@@ -7,6 +7,8 @@
  * page; the `analytics.readonly` scope is enough).
  */
 
+import { exchange, type Sleep } from "./http.js";
+
 /** A property as listed under an account. */
 export interface PropertyEntry {
   /** Numeric property id, without the "properties/" prefix. */
@@ -46,6 +48,7 @@ const MAX_PAGES = 100;
 export async function listAccountSummaries(
   token: string,
   fetchFn: typeof fetch = fetch,
+  sleep?: Sleep,
 ): Promise<AccountSummariesResponse[]> {
   const pages: AccountSummariesResponse[] = [];
   let pageToken: string | undefined;
@@ -55,8 +58,8 @@ export async function listAccountSummaries(
     if (pageToken) {
       url.searchParams.set("pageToken", pageToken);
     }
-    const res = await fetchFn(url.toString(), { headers: { authorization: `Bearer ${token}` } });
-    const text = await res.text();
+    const res = await exchange(url.toString(), { headers: { authorization: `Bearer ${token}` } }, fetchFn, sleep);
+    const text = res.text;
     if (!res.ok) {
       throw new Error(`accountSummaries.list failed (HTTP ${res.status}): ${text.slice(0, 400)}`);
     }

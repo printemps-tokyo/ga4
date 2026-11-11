@@ -1,6 +1,6 @@
 {
   "name": "@printemps-tokyo/ga4",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Check a GA4 property's recent traffic (users, sessions, pageviews) from the terminal. Zero-dependency CLI.",
   "type": "module",
   "license": "MIT",
