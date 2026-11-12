@@ -7,7 +7,7 @@
  * page; the `analytics.readonly` scope is enough).
  */
 
-import { exchange, type Sleep } from "./http.js";
+import { exchange, type Sleep } from "./shared/http.js";
 
 /** A property as listed under an account. */
 export interface PropertyEntry {

@@ -1,4 +1,4 @@
-import { exchange, type Sleep } from "./http.js";
+import { exchange, type Sleep } from "./shared/http.js";
 import type { RunReportResponse } from "./report.js";
 
 /** Strip an optional "properties/" prefix, leaving the numeric property id. */

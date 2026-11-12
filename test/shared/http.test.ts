@@ -1,5 +1,6 @@
+// Shared verbatim by ga4, gsc and sitepulse, like src/shared/.
 import { describe, expect, it } from "vitest";
-import { exchange } from "../src/http.js";
+import { exchange } from "../../src/shared/http.js";
 
 const noSleep = async (): Promise<void> => {};
 
@@ -29,11 +30,31 @@ describe("exchange", () => {
     expect(f.calls()).toBe(1);
   });
 
+  it("returns the last server error once the retries run out", async () => {
+    const f = fakeFetch([500]);
+    const res = await exchange("https://example.invalid/", {}, f.fn, noSleep);
+    expect(res.status).toBe(500);
+    expect(f.calls()).toBe(3);
+  });
+
   it("gives up after the retries on a network failure", async () => {
     const f = fakeFetch([new Error("socket hang up")]);
     await expect(exchange("https://example.invalid/", {}, f.fn, noSleep)).rejects.toThrow(
       "request failed: socket hang up",
     );
     expect(f.calls()).toBe(3);
+  });
+
+  it("retries a body that fails mid-read", async () => {
+    let n = 0;
+    const fn = (async () => {
+      n++;
+      if (n === 1) {
+        return { status: 200, ok: true, text: async () => Promise.reject(new TypeError("terminated")) } as unknown as Response;
+      }
+      return new Response("ok");
+    }) as typeof fetch;
+    expect(await exchange("https://example.invalid/", {}, fn, noSleep)).toEqual({ status: 200, ok: true, text: "ok" });
+    expect(n).toBe(2);
   });
 });
